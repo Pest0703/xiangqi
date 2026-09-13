@@ -8,7 +8,7 @@ from xiangqi_tutor.models.engine import CandidateMove
 _INTEGER_FIELDS = {"depth", "nodes", "multipv"}
 
 
-def parse_info_line(line: str) -> tuple[int, CandidateMove] | None:
+def parse_info_line(line: str, *, side_to_move: str = "w") -> tuple[int, CandidateMove] | None:
     """解析 Pikafish/Stockfish 风格的完整 UCI info PV 行。"""
     tokens = line.strip().split()
     if not tokens or tokens[0] != "info" or "pv" not in tokens or "score" not in tokens:
@@ -35,6 +35,14 @@ def parse_info_line(line: str) -> tuple[int, CandidateMove] | None:
     candidate = CandidateMove(
         move=pv[0], score_cp=score_cp, mate=mate,
         depth=values["depth"], nodes=values["nodes"], pv=pv,
+        score_for_red=(score_cp if side_to_move == "w" else -score_cp) if score_cp is not None else None,
     )
     return values["multipv"], candidate
 
+
+def normalize_score_for_red(score_cp: int | None, side_to_move: str) -> int | None:
+    if score_cp is None:
+        return None
+    if side_to_move not in ("w", "b"):
+        raise ValueError("side_to_move必须是w或b")
+    return score_cp if side_to_move == "w" else -score_cp

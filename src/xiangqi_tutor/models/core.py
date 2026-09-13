@@ -8,6 +8,10 @@ class Side(StrEnum):
     RED = "w"
     BLACK = "b"
 
+    @property
+    def opponent(self) -> "Side":
+        return Side.BLACK if self is Side.RED else Side.RED
+
 
 @dataclass(frozen=True, slots=True)
 class Square:
@@ -43,4 +47,3 @@ class Move:
         if len(value) != 4:
             raise ValueError(f"无效引擎走法：{value}")
         return cls(Square.from_engine(value[:2]), Square.from_engine(value[2:]))
-

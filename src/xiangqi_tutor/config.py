@@ -24,10 +24,10 @@ class AppSettings(BaseSettings):
     engine_hash_mb: int = Field(default=256, ge=16)
     engine_multipv: int = Field(default=3, ge=1, le=10)
     engine_depth: int = Field(default=16, ge=1)
+    engine_movetime_ms: int = Field(default=1500, ge=100)
     engine_timeout_seconds: float = Field(default=20, gt=0)
     llm_base_url: str = "https://api.openai.com/v1"
     llm_model: str = ""
     llm_temperature: float = Field(default=0.2, ge=0, le=2)
     llm_max_tokens: int = Field(default=1200, ge=1)
     llm_timeout_seconds: float = Field(default=30, gt=0)
-

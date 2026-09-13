@@ -1,40 +1,34 @@
 # 技术架构
 
-## 核心约束
+## 核心数据流
 
-- Pikafish 决定候选着与局面评分；LLM 只能根据结构化引擎证据做教学解释。
-- GUI、规则、状态、引擎、导师、数据与训练通过明确接口解耦。
-- 所有耗时操作放入后台任务；Qt 主线程只负责界面更新。
-- 没有 Pikafish 或 API 时应用仍可打开，已有棋谱与规则功能仍可使用。
-- 棋谱和训练数据必须记录来源与许可，无法确认再分发权的数据只允许用户导入。
+棋盘输入 → GameService → Position/规则 → EngineService → AnalysisResult → TutorEvidence → AI 导师 → UI
+
+规则层是唯一事实来源；Pikafish 负责棋力判断；LLM 只解释结构化证据。外部耗时工作由 QThread 执行，结果携带 FEN，旧局面结果不会覆盖新局面。
+
+## 权威模型与坐标
+
+- Position 是唯一权威局面，采用不可变更新；棋盘按 rank × 9 + file 存储。
+- 内部 file=0..8 对应 UCI/Pikafish 的 a..i；rank=0 是红方底线，rank=9 是黑方底线。
+- FEN 从黑方底线（rank 9）写到红方底线（rank 0），行棋方为 w（红）或 b（黑）。
+- GUI 正向显示时红方在下，内部 a 路显示在右；翻转只转换屏幕行列，不改变逻辑坐标、FEN 或引擎走法。
 
 ## 模块边界
 
-| 模块 | 职责 | 不负责 |
-|---|---|---|
-| `ui` | 棋盘绘制、交互、时间线、导师面板 | 规则判断和搜索 |
-| `board` | 九路十行规则、合法着生成、将军/将死 | UI 和引擎通信 |
-| `models` | Position、Move、分析结果等稳定数据结构 | 持久化与业务流程 |
-| `notation` | 象棋 FEN、引擎坐标、中文记谱转换 | 搜索 |
-| `engine` | Pikafish 发现、UCI 会话、输出解析、超时恢复 | 教学措辞 |
-| `tutor` | Provider、PromptBuilder、证据校验、结构化视觉指令 | 最佳着计算 |
-| `database` | 迁移、棋谱、缓存、学习记录 | UI |
-| `training` | 残局、猜棋、渐进提示、统计 | 未验证题目生成 |
-| `services` | 用例编排、异步任务、复盘流水线 | 具体控件 |
+| 模块 | 职责 |
+|---|---|
+| board | Piece/Position、伪合法着、合法着、将军与终局 |
+| services | 当前对局、历史、undo/redo、FEN 用例编排 |
+| notation | 引擎坐标与中文走法显示 |
+| engine | UCI 进程、握手、配置、MultiPV、评分归一化 |
+| tutor | 强类型证据、Prompt、OpenAI-compatible Provider |
+| ui | 原生棋盘、交互、设置与后台任务呈现 |
+| database | SQLite 初始化，后续承载棋谱与学习记录 |
 
-## 主要数据流
+## 评分规范
 
-`GUI 操作 → GameService → Rules/Position → EngineService → AnalysisResult → TutorService → 文字 + 可视化 JSON → GUI`
+UCI score 先记录为行棋方视角，再生成 score_for_red：正值始终代表红方较优，负值始终代表黑方较优。红走、黑走分别有协议测试。
 
-复盘先由引擎逐步筛选关键局面，再只把关键证据交给模型。缓存键包含 FEN 与完整引擎设置；导师缓存还包含问题、引擎证据和模型名。
+## 进程与密钥
 
-## Pikafish 接入
-
-采用长生命周期独立进程和标准输入输出管道。启动握手为 `uci/uciok` 与 `isready/readyok`；配置使用 `setoption name Threads/Hash/MultiPV/EvalFile value ...`；分析使用中国象棋 FEN 的 `position fen` 和 `go depth` 或 `go movetime`。解析每个 MultiPV 的最后完整深度结果，在 `bestmove` 后发布不可变结果对象。
-
-异常策略：启动前验证路径；握手和分析分别限时；stderr 写日志；退出时尝试 `stop`/`quit`；进程崩溃后允许重启；无合法着、将死和无 PV 作为正常终局结果表示。
-
-## 并发模型
-
-Phase 4 使用一个串行 EngineWorker 管理单个引擎进程，界面通过信号提交可取消任务。数据库连接按线程创建。HTTP 调用使用独立异步客户端，并有超时、有限重试和取消。
-
+引擎启动后完成 uci/uciok、isready/readyok，退出时依次尝试 stop、quit，必要时终止进程。API Key 只从 Windows keyring 或开发环境读取，不进入日志、QSettings 或 Git。

@@ -1,28 +1,30 @@
 # 中国象棋私人导师
 
-面向初学者到中级棋手的 Windows 中国象棋学习软件。产品原则是先引导思考，再逐级给出思路、候选方向、候选走法，最后才显示最佳着。
+Windows 10/11 上可本地运行的中国象棋学习软件。当前 MVP 已支持完整基础规则、真实棋盘、点击走棋、中文棋谱、FEN、悔棋/重做，以及可选的 Pikafish 和 OpenAI-compatible AI 导师。
 
-当前版本为 **Phase 1 可运行工程骨架**：包含配置、日志、SQLite 初始化、核心数据结构、Pikafish 自动发现与 UCI 输出解析、LLM Provider 边界和最小桌面界面。完整象棋规则将在 Phase 2 实现。
+## 本地运行
 
-## 运行
+    py -3.13 -m venv .venv
+    .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+    .\.venv\Scripts\python.exe -m xiangqi_tutor
 
-```powershell
-py -3.13 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-.\.venv\Scripts\python.exe -m xiangqi_tutor
-```
+已配置好的当前工作目录可直接运行最后一条命令。测试命令：
 
-运行测试：
+    .\.venv\Scripts\python.exe -m pytest
 
-```powershell
-.\.venv\Scripts\python.exe -m pytest
-```
+## 已有能力
 
-复制 `.env.example` 为 `.env` 可配置外部服务。API Key 不应写入源码或提交版本库；正式设置页将优先使用 Windows Credential Manager。
+- 完整基础规则：马腿、象眼、炮架、过河、九宫、将帅照面、将军与应将、牵制、将死/困毙。
+- QPainter 原生棋盘，32 枚文字棋子，选择与合法落点、最后一步、将军状态、翻转显示。
+- 新对局、吃子、悔棋、重做、中文走棋历史、FEN 复制与载入。
+- UCI EngineService、后台分析、MultiPV、固定红方视角评分和过期结果丢弃。
+- 强类型导师证据包、渐进提示约束、后台 OpenAI-compatible 调用。
+- 设置保存在 QSettings；API Key 进入 Windows 凭据库，不写入仓库。
 
-## Pikafish
+## 外部服务
 
-本项目不捆绑 Pikafish 或 NNUE。可将 `pikafish.exe` 与匹配的 `.nnue` 放入 `engines/`，或用 `XIANGQI_PIKAFISH_PATH` 和 `XIANGQI_PIKAFISH_NNUE_PATH` 指定。Pikafish 本体为 GPLv3；官方网络权重有单独许可，尤其需在商业分发前取得相应授权。
+软件不捆绑 Pikafish/NNUE。可在“设置”中选择 pikafish.exe、配置参数并测试连接。没有引擎时，基础对局仍完全可用。
 
-详细设计见 [架构](docs/ARCHITECTURE.md) 与 [开发计划](docs/DEVELOPMENT_PLAN.md)。
+AI 导师支持 OpenAI-compatible API。设置 Base URL、模型和 API Key 后可测试连接。没有 AI 配置不影响下棋或引擎分析。
 
+更精确的验收边界见 MVP_STATUS.md 和 BETA_AUDIT.md。

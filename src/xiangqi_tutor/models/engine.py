@@ -11,13 +11,18 @@ class CandidateMove:
     depth: int
     nodes: int
     pv: tuple[str, ...] = ()
+    score_for_red: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class AnalysisResult:
     fen: str
+    side_to_move: str
     best_move: str | None
     depth: int
     nodes: int
+    time_ms: int = 0
+    score_raw: int | None = None
+    score_pov: str = "side_to_move"
+    score_for_red: int | None = None
     candidates: tuple[CandidateMove, ...] = field(default_factory=tuple)
-
