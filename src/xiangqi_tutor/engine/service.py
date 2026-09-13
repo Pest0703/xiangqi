@@ -28,14 +28,20 @@ class EngineService:
         self.process: subprocess.Popen[str] | None = None
         self._lines: queue.Queue[str | None] = queue.Queue()
         self._reader: threading.Thread | None = None
+        self._multipv = 1
 
     def start(self) -> None:
         if self.process and self.process.poll() is None:
             return
         try:
             self.process = subprocess.Popen(
-                self.command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL, text=True, encoding="utf-8", bufsize=1,
+                self.command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                encoding="utf-8",
+                bufsize=1,
                 creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
             )
         except OSError as exc:
@@ -83,6 +89,7 @@ class EngineService:
 
     def configure(self, *, threads: int, hash_mb: int, multipv: int, nnue: Path | None = None) -> None:
         self.start()
+        self._multipv = max(1, multipv)
         for name, value in (("Threads", threads), ("Hash", hash_mb), ("MultiPV", multipv)):
             self._send(f"setoption name {name} value {value}")
         if nnue:
@@ -96,7 +103,7 @@ class EngineService:
         self._send(f"position fen {fen}")
         self._send(f"go movetime {movetime_ms}" if movetime_ms else f"go depth {depth or 16}")
         deadline = time.monotonic() + self.timeout
-        candidates: dict[int, CandidateMove] = {}
+        by_depth: dict[int, dict[int, CandidateMove]] = {}
         best_move: str | None = None
         started = time.monotonic()
         while True:
@@ -106,19 +113,30 @@ class EngineService:
                 self.stop()
                 raise
             if parsed := parse_info_line(line, side_to_move=side):
-                candidates[parsed[0]] = parsed[1]
+                multipv, candidate = parsed
+                by_depth.setdefault(candidate.depth, {})[multipv] = candidate
             if line.startswith("bestmove"):
                 parts = line.split()
                 best_move = None if len(parts) < 2 or parts[1] in ("(none)", "0000") else parts[1]
                 break
-        ordered = tuple(candidate for _, candidate in sorted(candidates.items()))
+        complete_depths = [depth for depth, group in by_depth.items() if all(index in group for index in range(1, self._multipv + 1))]
+        if complete_depths:
+            chosen_depth = max(complete_depths)
+        else:
+            chosen_depth = max(by_depth, key=lambda depth: (len(by_depth[depth]), depth), default=0)
+        ordered = tuple(candidate for _, candidate in sorted(by_depth.get(chosen_depth, {}).items()))
         first = ordered[0] if ordered else None
         raw = first.score_cp if first else None
         return AnalysisResult(
-            fen=fen, side_to_move=side, best_move=best_move,
-            depth=first.depth if first else 0, nodes=max((c.nodes for c in ordered), default=0),
-            time_ms=int((time.monotonic() - started) * 1000), score_raw=raw,
-            score_for_red=normalize_score_for_red(raw, side), candidates=ordered,
+            fen=fen,
+            side_to_move=side,
+            best_move=best_move,
+            depth=first.depth if first else 0,
+            nodes=max((c.nodes for c in ordered), default=0),
+            time_ms=int((time.monotonic() - started) * 1000),
+            score_raw=raw,
+            score_for_red=normalize_score_for_red(raw, side),
+            candidates=ordered,
         )
 
     def stop(self) -> None:

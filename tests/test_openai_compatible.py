@@ -51,3 +51,24 @@ def test_provider_converts_remote_error_to_safe_error() -> None:
         asyncio.run(provider.complete(make_request()))
     assert "secret-key" not in str(caught.value)
     assert "secret diagnostic" not in str(caught.value)
+
+
+def test_provider_allows_local_http_and_retries_429() -> None:
+    calls = 0
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(429, json={"error": "busy"})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "OK"}}]})
+
+    provider = OpenAICompatibleProvider(
+        base_url="http://127.0.0.1:11434/v1",
+        api_key="local",
+        model="qwen",
+        transport=httpx.MockTransport(handler),
+        max_retries=1,
+    )
+    assert asyncio.run(provider.complete(make_request()))["content"] == "OK"
+    assert calls == 2

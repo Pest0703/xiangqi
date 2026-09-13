@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,6 +17,17 @@ class EvidenceCandidate:
     score_for_red: int | None
     depth: int
     pv: tuple[str, ...] = ()
+    score_kind: str | None = None
+    mate: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class EvidencePVStep:
+    move: str
+    chinese: str
+    fen_before: str
+    fen_after: str
+    side: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,7 +45,10 @@ class TutorEvidence:
     score_after: int | None = None
     score_for_red: int | None = None
     pv: tuple[str, ...] = ()
+    validated_pv: tuple[EvidencePVStep, ...] = ()
     branch_id: str = "main"
+    request_id: str = ""
+    position_version: int = 0
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)

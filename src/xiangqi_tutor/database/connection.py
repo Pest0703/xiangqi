@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
-
 
 SCHEMA_VERSION = 1
 
@@ -20,7 +21,7 @@ class Database:
         return connection
 
     def initialize(self) -> None:
-        with self.connect() as connection:
+        with closing(self.connect()) as connection, connection:
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS schema_meta (
@@ -68,3 +69,26 @@ class Database:
                 (str(SCHEMA_VERSION),),
             )
 
+    def get_engine_cache(self, cache_key: str) -> dict[str, object] | None:
+        with closing(self.connect()) as connection, connection:
+            row = connection.execute("SELECT result_json FROM engine_cache WHERE cache_key = ?", (cache_key,)).fetchone()
+        return json.loads(row["result_json"]) if row else None
+
+    def put_engine_cache(self, cache_key: str, fen: str, settings: dict[str, object], result: dict[str, object]) -> None:
+        with closing(self.connect()) as connection, connection:
+            connection.execute(
+                "INSERT OR REPLACE INTO engine_cache(cache_key, fen, settings_json, result_json) VALUES(?, ?, ?, ?)",
+                (cache_key, fen, json.dumps(settings, ensure_ascii=False), json.dumps(result, ensure_ascii=False)),
+            )
+
+    def get_tutor_cache(self, cache_key: str) -> dict[str, object] | None:
+        with closing(self.connect()) as connection, connection:
+            row = connection.execute("SELECT response_json FROM tutor_cache WHERE cache_key = ?", (cache_key,)).fetchone()
+        return json.loads(row["response_json"]) if row else None
+
+    def put_tutor_cache(self, cache_key: str, fen: str, model: str, response: dict[str, object]) -> None:
+        with closing(self.connect()) as connection, connection:
+            connection.execute(
+                "INSERT OR REPLACE INTO tutor_cache(cache_key, fen, model, response_json) VALUES(?, ?, ?, ?)",
+                (cache_key, fen, model, json.dumps(response, ensure_ascii=False)),
+            )

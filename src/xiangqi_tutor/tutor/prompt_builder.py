@@ -4,9 +4,9 @@ import json
 from enum import StrEnum
 from typing import Any, Mapping
 
+from xiangqi_tutor.tutor.evidence import TutorEvidence
 from xiangqi_tutor.tutor.provider import TutorRequest
 from xiangqi_tutor.tutor.system_prompt import SYSTEM_PROMPT
-from xiangqi_tutor.tutor.evidence import TutorEvidence
 
 
 class TutorTask(StrEnum):
@@ -106,24 +106,38 @@ class PromptBuilder:
         )
 
     def build_from_evidence(
-        self, *, task: TutorTask, evidence: TutorEvidence,
-        level: UserLevel, question: str = "", hint_level: HintLevel | None = None,
+        self,
+        *,
+        task: TutorTask,
+        evidence: TutorEvidence,
+        level: UserLevel,
+        question: str = "",
+        hint_level: HintLevel | None = None,
         request_visuals: bool = False,
     ) -> TutorRequest:
         data = evidence.to_dict()
         return self.build(
-            task=task, fen=evidence.fen, side_to_move=evidence.side_to_move,
-            level=level, recent_moves=list(evidence.recent_moves),
+            task=task,
+            fen=evidence.fen,
+            side_to_move=evidence.side_to_move,
+            level=level,
+            recent_moves=list(evidence.recent_moves),
             engine_analysis={
                 "best_move": evidence.best_move,
                 "candidate_moves": data["candidate_moves"],
                 "score_for_red": evidence.score_for_red,
-                "pv": evidence.pv,
+                "pv": data["validated_pv"] or evidence.pv,
             },
-            played_move=evidence.played_move, question=question,
-            hint_level=hint_level, request_visuals=request_visuals,
+            played_move=evidence.played_move,
+            question=question,
+            hint_level=hint_level,
+            request_visuals=request_visuals,
             extra_context={
-                "pieces": data["pieces"], "legal_moves": evidence.legal_moves,
-                "last_move": evidence.last_move, "branch_id": evidence.branch_id,
+                "pieces": data["pieces"],
+                "legal_moves": evidence.legal_moves,
+                "last_move": evidence.last_move,
+                "branch_id": evidence.branch_id,
+                "request_id": evidence.request_id,
+                "position_version": evidence.position_version,
             },
         )

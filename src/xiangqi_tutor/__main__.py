@@ -4,10 +4,9 @@ import os
 import sys
 from pathlib import Path
 
-
 _DLL_DIRECTORIES: list[object] = []
 if getattr(sys, "frozen", False) and hasattr(os, "add_dll_directory"):
-    frozen_root = Path(getattr(sys, "_MEIPASS"))
+    frozen_root = Path(sys._MEIPASS)
     for relative in ("PySide6", "shiboken6"):
         candidate = frozen_root / relative
         if candidate.is_dir():

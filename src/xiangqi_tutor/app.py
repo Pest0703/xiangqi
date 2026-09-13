@@ -5,7 +5,6 @@ import os
 import sys
 from pathlib import Path
 
-
 _DLL_DIRECTORY_HANDLES: list[object] = []
 
 
@@ -45,9 +44,7 @@ def configure_logging(log_dir: Path) -> None:
 def main() -> int:
     settings = AppSettings()
     configure_logging(settings.log_dir)
-    QApplication.setHighDpiScaleFactorRoundingPolicy(
-        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
-    )
+    QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication(sys.argv)
     app.setApplicationName("中国象棋私人导师")
     app.setOrganizationName("XiangqiTutor")

@@ -28,4 +28,3 @@ def discover_nnue(engine_path: Path | None, configured: Path | None = None) -> P
     if engine_path:
         candidates.extend(sorted(engine_path.parent.glob("*.nnue")))
     return next((path.resolve() for path in candidates if path.is_file()), None)
-

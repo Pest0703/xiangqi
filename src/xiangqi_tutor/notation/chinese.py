@@ -5,13 +5,20 @@ from xiangqi_tutor.models.core import Move, Side
 
 RED_NUMBERS = "一二三四五六七八九"
 NAMES = {
-    (Side.RED, PieceType.GENERAL): "帅", (Side.BLACK, PieceType.GENERAL): "将",
-    (Side.RED, PieceType.ADVISOR): "仕", (Side.BLACK, PieceType.ADVISOR): "士",
-    (Side.RED, PieceType.ELEPHANT): "相", (Side.BLACK, PieceType.ELEPHANT): "象",
-    (Side.RED, PieceType.HORSE): "马", (Side.BLACK, PieceType.HORSE): "马",
-    (Side.RED, PieceType.ROOK): "车", (Side.BLACK, PieceType.ROOK): "车",
-    (Side.RED, PieceType.CANNON): "炮", (Side.BLACK, PieceType.CANNON): "炮",
-    (Side.RED, PieceType.PAWN): "兵", (Side.BLACK, PieceType.PAWN): "卒",
+    (Side.RED, PieceType.GENERAL): "帅",
+    (Side.BLACK, PieceType.GENERAL): "将",
+    (Side.RED, PieceType.ADVISOR): "仕",
+    (Side.BLACK, PieceType.ADVISOR): "士",
+    (Side.RED, PieceType.ELEPHANT): "相",
+    (Side.BLACK, PieceType.ELEPHANT): "象",
+    (Side.RED, PieceType.HORSE): "马",
+    (Side.BLACK, PieceType.HORSE): "马",
+    (Side.RED, PieceType.ROOK): "车",
+    (Side.BLACK, PieceType.ROOK): "车",
+    (Side.RED, PieceType.CANNON): "炮",
+    (Side.BLACK, PieceType.CANNON): "炮",
+    (Side.RED, PieceType.PAWN): "兵",
+    (Side.BLACK, PieceType.PAWN): "卒",
 }
 
 
@@ -44,4 +51,3 @@ def move_to_chinese(position: Position, move: Move) -> str:
             distance = abs(dr)
             suffix = RED_NUMBERS[distance - 1] if piece.side is Side.RED else str(distance)
     return prefix + action + suffix
-

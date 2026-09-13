@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -23,9 +25,12 @@ class OpenAICompatibleProvider(LLMProvider):
         max_tokens: int = 1200,
         timeout_seconds: float = 30,
         transport: httpx.AsyncBaseTransport | None = None,
+        max_retries: int = 2,
     ) -> None:
-        if not base_url.startswith("https://"):
-            raise ValueError("模型 API 必须使用 HTTPS")
+        parsed = urlparse(base_url)
+        local_http = parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+        if parsed.scheme != "https" and not local_http:
+            raise ValueError("模型 API 必须使用 HTTPS；仅本机服务允许 HTTP")
         if not api_key.strip() or not model.strip():
             raise ValueError("API Key 和模型名称不能为空")
         self.base_url = base_url.rstrip("/")
@@ -35,6 +40,18 @@ class OpenAICompatibleProvider(LLMProvider):
         self.max_tokens = max_tokens
         self.timeout_seconds = timeout_seconds
         self._transport = transport
+        self.max_retries = max(0, max_retries)
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=self.timeout_seconds, transport=self._transport)
+        return self._client
+
+    async def aclose(self) -> None:
+        if self._client:
+            await self._client.aclose()
+            self._client = None
 
     async def complete(self, request: TutorRequest) -> dict[str, object]:
         system_prompt = str(request.context.get("system_prompt", ""))
@@ -52,16 +69,24 @@ class OpenAICompatibleProvider(LLMProvider):
         }
         started = time.perf_counter()
         try:
-            async with httpx.AsyncClient(
-                timeout=self.timeout_seconds, transport=self._transport
-            ) as client:
-                response = await client.post(
-                    f"{self.base_url}/chat/completions",
-                    headers={"Authorization": f"Bearer {self._api_key}"},
-                    json=payload,
-                )
-                response.raise_for_status()
-                data: dict[str, Any] = response.json()
+            response = None
+            for attempt in range(self.max_retries + 1):
+                try:
+                    response = await self._get_client().post(
+                        f"{self.base_url}/chat/completions",
+                        headers={"Authorization": f"Bearer {self._api_key}"},
+                        json=payload,
+                    )
+                    if response.status_code != 429 and response.status_code < 500:
+                        break
+                except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout):
+                    if attempt >= self.max_retries:
+                        raise
+                if attempt < self.max_retries:
+                    await asyncio.sleep(0.25 * (2**attempt))
+            assert response is not None
+            response.raise_for_status()
+            data: dict[str, Any] = response.json()
             content = data["choices"][0]["message"]["content"]
         except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as exc:
             raise LLMProviderError("模型服务暂时不可用或返回格式异常") from exc
@@ -82,4 +107,3 @@ class OpenAICompatibleProvider(LLMProvider):
         )
         result = await self.complete(request)
         return str(result["model"]), float(result["latency_seconds"])
-

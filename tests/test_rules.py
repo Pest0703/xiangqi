@@ -1,6 +1,6 @@
 import pytest
 
-from xiangqi_tutor.board import IllegalMoveError, Piece, PieceType, Position, START_FEN
+from xiangqi_tutor.board import START_FEN, IllegalMoveError, Piece, PieceType, Position
 from xiangqi_tutor.models.core import Move, Side, Square
 
 
@@ -17,9 +17,11 @@ def piece(side: Side, kind: PieceType) -> Piece:
 
 
 def base(side: Side = Side.RED) -> Position:
-    return (Position.empty(side)
-            .with_piece(sq("e0"), piece(Side.RED, PieceType.GENERAL))
-            .with_piece(sq("d9"), piece(Side.BLACK, PieceType.GENERAL)))
+    return (
+        Position.empty(side)
+        .with_piece(sq("e0"), piece(Side.RED, PieceType.GENERAL))
+        .with_piece(sq("d9"), piece(Side.BLACK, PieceType.GENERAL))
+    )
 
 
 def targets(position: Position, source: str) -> set[str]:
@@ -78,12 +80,22 @@ def test_pawn_before_and_after_river_never_retreats() -> None:
     assert targets(p, "c3") == {"c4"}
     p = base().with_piece(sq("c5"), piece(Side.RED, PieceType.PAWN))
     assert targets(p, "c5") == {"b5", "d5", "c6"}
-    p = Position.empty(Side.BLACK).with_piece(sq("e0"), piece(Side.RED, PieceType.GENERAL)).with_piece(sq("d9"), piece(Side.BLACK, PieceType.GENERAL)).with_piece(sq("c4"), piece(Side.BLACK, PieceType.PAWN))
+    p = (
+        Position.empty(Side.BLACK)
+        .with_piece(sq("e0"), piece(Side.RED, PieceType.GENERAL))
+        .with_piece(sq("d9"), piece(Side.BLACK, PieceType.GENERAL))
+        .with_piece(sq("c4"), piece(Side.BLACK, PieceType.PAWN))
+    )
     assert targets(p, "c4") == {"b4", "d4", "c3"}
 
 
 def test_generals_may_not_face_and_move_must_answer_check() -> None:
-    p = Position.empty().with_piece(sq("e0"), piece(Side.RED, PieceType.GENERAL)).with_piece(sq("e9"), piece(Side.BLACK, PieceType.GENERAL)).with_piece(sq("e5"), piece(Side.RED, PieceType.ROOK))
+    p = (
+        Position.empty()
+        .with_piece(sq("e0"), piece(Side.RED, PieceType.GENERAL))
+        .with_piece(sq("e9"), piece(Side.BLACK, PieceType.GENERAL))
+        .with_piece(sq("e5"), piece(Side.RED, PieceType.ROOK))
+    )
     assert "d5" not in targets(p, "e5")
     checked = base().with_piece(sq("e7"), piece(Side.BLACK, PieceType.ROOK)).with_piece(sq("a0"), piece(Side.RED, PieceType.ROOK))
     assert checked.is_in_check(Side.RED)
@@ -107,8 +119,35 @@ def test_capture_and_illegal_move_rejection() -> None:
 
 
 def test_general_is_not_captured_and_checkmate_has_no_legal_moves() -> None:
-    p = Position.empty(Side.BLACK).with_piece(sq("e0"), piece(Side.RED, PieceType.GENERAL)).with_piece(sq("e9"), piece(Side.BLACK, PieceType.GENERAL))
-    p = p.with_piece(sq("e8"), piece(Side.RED, PieceType.ROOK)).with_piece(sq("d8"), piece(Side.RED, PieceType.ROOK)).with_piece(sq("f8"), piece(Side.RED, PieceType.ROOK))
+    p = (
+        Position.empty(Side.BLACK)
+        .with_piece(sq("e0"), piece(Side.RED, PieceType.GENERAL))
+        .with_piece(sq("e9"), piece(Side.BLACK, PieceType.GENERAL))
+    )
+    p = (
+        p.with_piece(sq("e8"), piece(Side.RED, PieceType.ROOK))
+        .with_piece(sq("d8"), piece(Side.RED, PieceType.ROOK))
+        .with_piece(sq("f8"), piece(Side.RED, PieceType.ROOK))
+    )
     assert p.is_in_check(Side.BLACK)
     assert p.is_checkmate and p.is_game_over
     assert all(move.target != sq("e9") for move in p._apply_unchecked(mv("e8e7")).legal_moves())
+
+
+def test_fen_requires_one_general_per_side_and_valid_clocks() -> None:
+    with pytest.raises(ValueError, match="红方帅"):
+        Position.from_fen("4k4/9/9/9/9/9/9/9/9/3K1K3 w - - 0 1")
+    with pytest.raises(ValueError, match="半回合"):
+        Position.from_fen(START_FEN.rsplit(" ", 2)[0] + " -1 1")
+    with pytest.raises(ValueError, match="回合数"):
+        Position.from_fen(START_FEN.rsplit(" ", 1)[0] + " 0")
+
+
+def test_strict_fen_rejects_obviously_illegal_positions() -> None:
+    facing = "4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1"
+    assert Position.from_fen(facing)
+    with pytest.raises(ValueError, match="照面"):
+        Position.from_fen(facing, strict=True)
+    outside = "4k4/9/9/9/9/9/9/9/9/K8 w - - 0 1"
+    with pytest.raises(ValueError, match="九宫"):
+        Position.from_fen(outside, strict=True)

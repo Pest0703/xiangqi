@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import re
 
-from xiangqi_tutor.models.engine import CandidateMove
-
+from xiangqi_tutor.models.engine import CandidateMove, EvalScore, ScoreKind
 
 _INTEGER_FIELDS = {"depth", "nodes", "multipv"}
 
@@ -32,10 +31,22 @@ def parse_info_line(line: str, *, side_to_move: str = "w") -> tuple[int, Candida
     pv = tuple(tokens[pv_index + 1 :])
     if not pv:
         return None
+    normalized = (score_cp if side_to_move == "w" else -score_cp) if score_cp is not None else None
+    mate_for_red = (mate if side_to_move == "w" else -mate) if mate is not None else None
+    evaluation = None
+    if score_cp is not None:
+        evaluation = EvalScore(ScoreKind.CP, score_cp, score_for_red=normalized)
+    elif mate is not None:
+        evaluation = EvalScore(ScoreKind.MATE, mate, score_for_red=mate_for_red)
     candidate = CandidateMove(
-        move=pv[0], score_cp=score_cp, mate=mate,
-        depth=values["depth"], nodes=values["nodes"], pv=pv,
-        score_for_red=(score_cp if side_to_move == "w" else -score_cp) if score_cp is not None else None,
+        move=pv[0],
+        score_cp=score_cp,
+        mate=mate,
+        depth=values["depth"],
+        nodes=values["nodes"],
+        pv=pv,
+        score_for_red=normalized,
+        evaluation=evaluation,
     )
     return values["multipv"], candidate
 

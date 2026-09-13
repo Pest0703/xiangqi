@@ -1,3 +1,4 @@
+from contextlib import closing
 from pathlib import Path
 
 from xiangqi_tutor.database.connection import Database
@@ -12,9 +13,7 @@ def test_square_and_move_engine_round_trip() -> None:
 
 
 def test_parse_multipv_info() -> None:
-    parsed = parse_info_line(
-        "info depth 18 multipv 2 score cp 31 nodes 4567 pv h2e2 h9g7"
-    )
+    parsed = parse_info_line("info depth 18 multipv 2 score cp 31 nodes 4567 pv h2e2 h9g7")
     assert parsed is not None
     index, candidate = parsed
     assert index == 2
@@ -26,13 +25,10 @@ def test_parse_multipv_info() -> None:
 def test_database_initializes(tmp_path: Path) -> None:
     database = Database(tmp_path / "test.sqlite3")
     database.initialize()
-    with database.connect() as connection:
-        version = connection.execute(
-            "SELECT value FROM schema_meta WHERE key='version'"
-        ).fetchone()[0]
+    with closing(database.connect()) as connection, connection:
+        version = connection.execute("SELECT value FROM schema_meta WHERE key='version'").fetchone()[0]
     assert version == "1"
 
 
 def test_missing_engine_is_nonfatal(tmp_path: Path) -> None:
     assert discover_pikafish(tmp_path / "missing.exe") is None
-

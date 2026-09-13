@@ -2,7 +2,7 @@
 
 ## 核心数据流
 
-棋盘输入 → GameService → Position/规则 → EngineService → AnalysisResult → TutorEvidence → AI 导师 → UI
+棋盘输入 → MatchService → GameService → Position/规则 → EngineManager → AnalysisResult → MoveAssessment/TutorEvidence → AI 导师 → UI
 
 规则层是唯一事实来源；Pikafish 负责棋力判断；LLM 只解释结构化证据。外部耗时工作由 QThread 执行，结果携带 FEN，旧局面结果不会覆盖新局面。
 
@@ -25,10 +25,16 @@
 | ui | 原生棋盘、交互、设置与后台任务呈现 |
 | database | SQLite 初始化，后续承载棋谱与学习记录 |
 
+MatchService 是对局控制权与状态的唯一来源，管理 GameMode、human_side、engine_side、position_version 和 MatchState。EngineManager 在单一后台执行器中复用一个 UCI 进程；所有任务绑定 request_id、FEN 与 position_version。
+
+MoveAssessmentService 对比走前/走后分析并转换为用户视角损失。PVValidator 逐步执行引擎 PV，只有规则层验证成功的步骤才进入 TutorEvidence。VariationTree 独立于主对局 undo/redo 栈，确保未来沙盘分支不破坏主线。
+
 ## 评分规范
 
 UCI score 先记录为行棋方视角，再生成 score_for_red：正值始终代表红方较优，负值始终代表黑方较优。红走、黑走分别有协议测试。
 
 ## 进程与密钥
 
-引擎启动后完成 uci/uciok、isready/readyok，退出时依次尝试 stop、quit，必要时终止进程。API Key 只从 Windows keyring 或开发环境读取，不进入日志、QSettings 或 Git。
+引擎启动后完成 uci/uciok、isready/readyok，退出时依次尝试 stop、quit，必要时终止进程。引擎缓存键包含 FEN、程序路径/修改时间、NNUE、Threads、Hash、MultiPV、depth 和 movetime。
+
+API Key 只从 Windows keyring 或临时环境读取，不进入日志、QSettings、缓存键或 Git。远程端点要求 HTTPS；localhost/127.0.0.1 可使用 HTTP。

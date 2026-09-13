@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Iterable, Iterator
+from typing import Iterator
 
 from xiangqi_tutor.models.core import Move, Side, Square
-
 
 START_FEN = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1"
 
@@ -81,7 +80,7 @@ class Position:
                     yield square, piece
 
     @classmethod
-    def from_fen(cls, fen: str) -> "Position":
+    def from_fen(cls, fen: str, *, strict: bool = False) -> "Position":
         parts = fen.strip().split()
         if len(parts) < 2:
             raise ValueError("FEN必须至少包含棋盘和行棋方")
@@ -94,7 +93,7 @@ class Position:
             rank = 9 - row_index
             file = 0
             for char in row:
-                if char.isdigit():
+                if char in "123456789":
                     file += int(char)
                 elif char.lower() in kinds:
                     if file >= 9:
@@ -110,12 +109,39 @@ class Position:
             side = Side(parts[1])
         except ValueError as exc:
             raise ValueError("FEN行棋方必须是w或b") from exc
-        halfmove = int(parts[4]) if len(parts) > 4 else 0
-        fullmove = int(parts[5]) if len(parts) > 5 else 1
+        try:
+            halfmove = int(parts[4]) if len(parts) > 4 else 0
+            fullmove = int(parts[5]) if len(parts) > 5 else 1
+        except ValueError as exc:
+            raise ValueError("FEN时钟字段必须是整数") from exc
+        if halfmove < 0:
+            raise ValueError("FEN半回合时钟不能为负数")
+        if fullmove < 1:
+            raise ValueError("FEN回合数必须大于等于1")
         position = cls(tuple(cells), side, halfmove, fullmove)
-        if sum(p.kind is PieceType.GENERAL for _, p in position.pieces()) != 2:
-            raise ValueError("FEN必须包含双方将帅")
+        position.validate(strict=strict)
         return position
+
+    def validate(self, *, strict: bool = False) -> None:
+        for side, name in ((Side.RED, "红方帅"), (Side.BLACK, "黑方将")):
+            count = sum(piece.side is side and piece.kind is PieceType.GENERAL for _, piece in self.pieces())
+            if count != 1:
+                raise ValueError(f"FEN必须包含恰好一个{name}")
+        if not strict:
+            return
+        for square, piece in self.pieces():
+            if piece.kind in (PieceType.GENERAL, PieceType.ADVISOR) and not self._palace(piece.side, square):
+                raise ValueError("严格校验失败：将帅或仕士位于九宫之外")
+            if piece.kind is PieceType.ELEPHANT:
+                on_own_side = square.rank <= 4 if piece.side is Side.RED else square.rank >= 5
+                if not on_own_side:
+                    raise ValueError("严格校验失败：相象越过河界")
+        red = self.general_square(Side.RED)
+        black = self.general_square(Side.BLACK)
+        if red and black and red.file == black.file:
+            between = range(min(red.rank, black.rank) + 1, max(red.rank, black.rank))
+            if all(self.piece_at(Square(red.file, rank)) is None for rank in between):
+                raise ValueError("严格校验失败：将帅照面")
 
     def to_fen(self) -> str:
         rows: list[str] = []
@@ -182,25 +208,34 @@ class Position:
                             candidates.append(target)
                         break
         elif piece.kind is PieceType.HORSE:
-            for df, dr, lf, lr in ((1,2,0,1),(-1,2,0,1),(1,-2,0,-1),(-1,-2,0,-1),(2,1,1,0),(2,-1,1,0),(-2,1,-1,0),(-2,-1,-1,0)):
+            for df, dr, lf, lr in (
+                (1, 2, 0, 1),
+                (-1, 2, 0, 1),
+                (1, -2, 0, -1),
+                (-1, -2, 0, -1),
+                (2, 1, 1, 0),
+                (2, -1, 1, 0),
+                (-2, 1, -1, 0),
+                (-2, -1, -1, 0),
+            ):
                 if self._inside(source.file + lf, source.rank + lr) and self.piece_at(Square(source.file + lf, source.rank + lr)) is None:
                     if self._inside(source.file + df, source.rank + dr):
                         candidates.append(Square(source.file + df, source.rank + dr))
         elif piece.kind is PieceType.ELEPHANT:
-            for df, dr in ((2,2),(-2,2),(2,-2),(-2,-2)):
+            for df, dr in ((2, 2), (-2, 2), (2, -2), (-2, -2)):
                 tf, tr = source.file + df, source.rank + dr
                 if self._inside(tf, tr) and ((tr <= 4) if piece.side is Side.RED else (tr >= 5)):
                     eye = Square(source.file + df // 2, source.rank + dr // 2)
                     if self.piece_at(eye) is None:
                         candidates.append(Square(tf, tr))
         elif piece.kind is PieceType.ADVISOR:
-            for df, dr in ((1,1),(-1,1),(1,-1),(-1,-1)):
+            for df, dr in ((1, 1), (-1, 1), (1, -1), (-1, -1)):
                 if self._inside(source.file + df, source.rank + dr):
                     target = Square(source.file + df, source.rank + dr)
                     if self._palace(piece.side, target):
                         candidates.append(target)
         elif piece.kind is PieceType.GENERAL:
-            for df, dr in ((1,0),(-1,0),(0,1),(0,-1)):
+            for df, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                 if self._inside(source.file + df, source.rank + dr):
                     target = Square(source.file + df, source.rank + dr)
                     if self._palace(piece.side, target):
@@ -236,7 +271,8 @@ class Position:
         cells[self._index(move.target)] = piece
         captured = self.piece_at(move.target)
         return Position(
-            tuple(cells), self.side_to_move.opponent,
+            tuple(cells),
+            self.side_to_move.opponent,
             0 if captured or (piece and piece.kind is PieceType.PAWN) else self.halfmove_clock + 1,
             self.fullmove_number + (1 if self.side_to_move is Side.BLACK else 0),
         )

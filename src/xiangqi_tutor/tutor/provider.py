@@ -21,4 +21,3 @@ class LLMProvider(ABC):
     @abstractmethod
     async def test_connection(self) -> tuple[str, float]:
         raise NotImplementedError
-

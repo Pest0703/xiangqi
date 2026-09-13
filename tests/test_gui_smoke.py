@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt
 from xiangqi_tutor.config import AppSettings
 from xiangqi_tutor.database.connection import Database
 from xiangqi_tutor.models.core import Square
+from xiangqi_tutor.tutor import TutorTask
 from xiangqi_tutor.ui.main_window import MainWindow
 
 
@@ -40,8 +41,12 @@ def test_board_click_move_updates_history_and_flip_preserves_logic(qtbot, tmp_pa
     window.show()
     qtbot.waitExposed(window)
     before = window.game.export_fen()
-    qtbot.mouseClick(window.board_widget, Qt.MouseButton.LeftButton, pos=window.board_widget._screen_point(Square.from_engine("h2")).toPoint())
-    qtbot.mouseClick(window.board_widget, Qt.MouseButton.LeftButton, pos=window.board_widget._screen_point(Square.from_engine("e2")).toPoint())
+    qtbot.mouseClick(
+        window.board_widget, Qt.MouseButton.LeftButton, pos=window.board_widget._screen_point(Square.from_engine("h2")).toPoint()
+    )
+    qtbot.mouseClick(
+        window.board_widget, Qt.MouseButton.LeftButton, pos=window.board_widget._screen_point(Square.from_engine("e2")).toPoint()
+    )
     assert len(window.game.records) == 1
     assert window.history.count() == 1
     logical = window.game.export_fen()
@@ -59,3 +64,10 @@ def test_board_coordinate_mapping_round_trips_before_and_after_flip(qtbot, tmp_p
     for engine_square in ("a0", "i0", "a9", "i9", "e4"):
         square = Square.from_engine(engine_square)
         assert window.board_widget.square_at(window.board_widget._screen_point(square)) == square
+
+
+def test_tutor_task_routing_is_not_all_free_question(qtbot, tmp_path: Path) -> None:
+    window = make_window(qtbot, tmp_path)
+    assert window._route_tutor_task("比较前两个候选") is TutorTask.COMPARE_MOVES
+    assert window._route_tutor_task("为什么这一步不好") is TutorTask.EXPLAIN_MOVE
+    assert window._route_tutor_task("给我提示") is TutorTask.HINT

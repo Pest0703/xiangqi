@@ -1,6 +1,8 @@
-from xiangqi_tutor.board import Position, START_FEN
-from xiangqi_tutor.models.core import Move, Side
-from xiangqi_tutor.services import GameService
+import pytest
+
+from xiangqi_tutor.board import START_FEN, Piece, PieceType, Position
+from xiangqi_tutor.models.core import Move, Side, Square
+from xiangqi_tutor.services import GameService, GameStatus
 
 
 def test_move_undo_redo_and_new_game() -> None:
@@ -43,3 +45,20 @@ def test_load_fen_resets_history() -> None:
     game.load_fen(START_FEN.replace(" w ", " b "))
     assert game.position.side_to_move is Side.BLACK and not game.records
 
+
+def test_redo_recomputes_terminal_status_and_terminal_rejects_moves() -> None:
+    position = (
+        Position.empty(Side.RED)
+        .with_piece(Square.from_engine("e0"), Piece(Side.RED, PieceType.GENERAL))
+        .with_piece(Square.from_engine("e9"), Piece(Side.BLACK, PieceType.GENERAL))
+        .with_piece(Square.from_engine("d8"), Piece(Side.RED, PieceType.ROOK))
+        .with_piece(Square.from_engine("f8"), Piece(Side.RED, PieceType.ROOK))
+        .with_piece(Square.from_engine("e7"), Piece(Side.RED, PieceType.ROOK))
+    )
+    game = GameService(position)
+    game.move(Move.from_engine("e7e8"))
+    assert game.status is GameStatus.CHECKMATE
+    assert game.undo() and game.status is GameStatus.ONGOING
+    assert game.redo() and game.status is GameStatus.CHECKMATE
+    with pytest.raises(ValueError, match="已经结束"):
+        game.move(Move.from_engine("e9d9"))
